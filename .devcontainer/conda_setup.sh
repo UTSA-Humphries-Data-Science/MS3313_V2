@@ -28,13 +28,20 @@ echo "🗄️ Setting up PostgreSQL..."
 sudo service postgresql start
 sleep 2
 
-sudo -u postgres psql -c "CREATE USER student WITH SUPERUSER CREATEDB;" 2>/dev/null || true
+# 'student' is the single default & admin user for the classroom database.
+# SUPERUSER + CREATEDB lets students do anything (create tables, load CSVs,
+# create databases, GRANT, etc.) without permission errors.
+sudo -u postgres psql -c "CREATE USER student WITH SUPERUSER CREATEDB;" 2>/dev/null || \
+sudo -u postgres psql -c "ALTER USER student WITH SUPERUSER CREATEDB;" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER USER student WITH PASSWORD NULL;" 2>/dev/null || true
 sudo -u postgres psql -c "CREATE DATABASE student_db OWNER student;" 2>/dev/null || true
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO student;" 2>/dev/null || true
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE student_db TO student;" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER DATABASE postgres OWNER TO student;" 2>/dev/null || true
 
-# Create vscode user for SQLTools extension
-sudo -u postgres psql -c "CREATE USER vscode WITH SUPERUSER CREATEDB;" 2>/dev/null || true
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO vscode;" 2>/dev/null || true
+# Remove legacy 'vscode' role if it exists — student is the sole admin now.
+sudo -u postgres psql -c "DROP OWNED BY vscode;" 2>/dev/null || true
+sudo -u postgres psql -c "DROP USER vscode;" 2>/dev/null || true
 
 # Load sample databases if SQL files exist
 WORKSPACE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

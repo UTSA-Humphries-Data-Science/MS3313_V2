@@ -12,9 +12,16 @@ if ! sudo -n service postgresql status >/dev/null 2>&1; then
 fi
 echo "✅ PostgreSQL running"
 
-# Ensure student user exists (idempotent)
-sudo -u postgres psql -c "CREATE USER student WITH SUPERUSER CREATEDB;" 2>/dev/null || true
+# Ensure student user exists with full admin rights (idempotent)
+sudo -u postgres psql -c "CREATE USER student WITH SUPERUSER CREATEDB;" 2>/dev/null || \
+sudo -u postgres psql -c "ALTER USER student WITH SUPERUSER CREATEDB;" 2>/dev/null || true
+sudo -u postgres psql -c "ALTER USER student WITH PASSWORD NULL;" 2>/dev/null || true
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO student;" 2>/dev/null || true
+
+# Drop legacy 'vscode' role so 'student' is the sole admin
+sudo -u postgres psql -c "REASSIGN OWNED BY vscode TO student;" 2>/dev/null || true
+sudo -u postgres psql -c "DROP OWNED BY vscode;" 2>/dev/null || true
+sudo -u postgres psql -c "DROP USER vscode;" 2>/dev/null || true
 
 # Load sample databases if they exist and haven't been loaded
 WORKSPACE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,23 +33,50 @@ if [ -d "$WORKSPACE_DIR/databases" ]; then
     done
 fi
 
-# Ensure R kernel is registered and refresh Jupyter
-# Re-register kernel on every start to ensure VS Code detects it
-R --quiet --no-save -e "IRkernel::installspec(user=FALSE)" 2>/dev/null || true
+# ============================================
+# R kernel: guarantee it is registered and visible
+# ============================================
+# Students have reported needing to rebuild the container to get the R
+# kernel to appear. This block makes registration idempotent and self-healing:
+#   1. If the global kernelspec is missing, reinstall it.
+#   2. If the global location is not writable (rare), fall back to user spec.
+#   3. Always refresh kernelspec cache so VS Code Jupyter picks it up.
+GLOBAL_IR=/opt/conda/share/jupyter/kernels/ir/kernel.json
+USER_IR="$HOME/.local/share/jupyter/kernels/ir/kernel.json"
 
-# Force Jupyter to recognize all kernels (helps VS Code pickup)
-jupyter kernelspec list > /dev/null 2>&1
+if [ ! -f "$GLOBAL_IR" ] && [ ! -f "$USER_IR" ]; then
+    echo "🔧 R kernel missing — registering..."
+    if [ -w /opt/conda/share/jupyter/kernels ] 2>/dev/null; then
+        R --quiet --no-save -e "IRkernel::installspec(user=FALSE, name='ir', displayname='R')" \
+            >/dev/null 2>&1 || \
+        R --quiet --no-save -e "IRkernel::installspec(user=TRUE,  name='ir', displayname='R')" \
+            >/dev/null 2>&1
+    else
+        R --quiet --no-save -e "IRkernel::installspec(user=TRUE, name='ir', displayname='R')" \
+            >/dev/null 2>&1
+    fi
+fi
 
-# Touch kernel files to update timestamps (helps VS Code detect changes)
-touch /opt/conda/share/jupyter/kernels/ir/kernel.json 2>/dev/null || true
-touch ~/.local/share/jupyter/kernels/*/kernel.json 2>/dev/null || true
+# Refresh kernelspec cache (helps VS Code Jupyter detect kernels without restart)
+jupyter kernelspec list >/dev/null 2>&1
+touch "$GLOBAL_IR" 2>/dev/null || true
+touch "$USER_IR" 2>/dev/null || true
 
-# Small delay to let VS Code Jupyter extension pick up kernels
-sleep 1
+if jupyter kernelspec list 2>/dev/null | grep -q '\bir\b'; then
+    echo "✅ R kernel registered"
+else
+    echo "⚠️  R kernel still missing — run: R -e \"IRkernel::installspec(user=TRUE)\""
+fi
 
-# Ensure Git config
+# Ensure user R library exists and is writable so students can install.packages()
+mkdir -p "$HOME/R/library"
+
+# Ensure Git config (classroom: never sign commits, no matter what
+# /etc/gitconfig or a stale repo-local override says)
 git config --global commit.gpgsign false 2>/dev/null || true
 git config --global tag.gpgsign false 2>/dev/null || true
+git config --unset commit.gpgsign 2>/dev/null || true
+git config --unset tag.gpgsign 2>/dev/null || true
 
 echo ""
 echo "════════════════════════════════════════════"

@@ -77,8 +77,14 @@ RUN R -e "devtools::install_github('gedeck/mlba/mlba', force=TRUE, upgrade='neve
   R -e "devtools::install_github('gastonstat/DiscriMiner', force=TRUE, upgrade='never')"
 
 # ---- Register Jupyter kernels globally ----
-RUN R -e "IRkernel::installspec(user=FALSE)" && \
-  python3 -m ipykernel install --name python3 --display-name "Python 3" --user
+# Install R kernel system-wide so every user/workspace sees it without re-registration.
+# We also install it into the user prefix as a fallback so VS Code Jupyter always finds it.
+RUN R -e "IRkernel::installspec(user=FALSE, name='ir', displayname='R')" && \
+  python3 -m ipykernel install --name python3 --display-name "Python 3" --sys-prefix && \
+  # Make global kernel spec dir readable/writable so re-registration in postStart never fails
+  chown -R jovyan:users /opt/conda/share/jupyter/kernels && \
+  chmod -R u+rwX,g+rwX /opt/conda/share/jupyter/kernels && \
+  jupyter kernelspec list
 
 # ---- Jupyter config (no token/password for classroom) ----
 RUN mkdir -p /home/jovyan/.jupyter && \
@@ -90,9 +96,14 @@ RUN mkdir -p /home/jovyan/.jupyter && \
   echo "c.ServerApp.disable_check_xsrf = True" >> /home/jovyan/.jupyter/jupyter_server_config.py
 
 # ---- R profile (user library + CRAN mirror) ----
+# Pre-create the user library with correct ownership so students can
+# install.packages() without permission errors. Also pin a fast CRAN mirror
+# and set parallel compile cores for snappy installs.
 RUN mkdir -p /home/jovyan/R/library && \
+  chown -R jovyan:users /home/jovyan/R && \
   echo 'user_lib <- "~/R/library"' > /home/jovyan/.Rprofile && \
   echo 'if (!dir.exists(user_lib)) dir.create(user_lib, recursive = TRUE)' >> /home/jovyan/.Rprofile && \
   echo '.libPaths(c(user_lib, .libPaths()))' >> /home/jovyan/.Rprofile && \
-  echo 'options(repos = c(CRAN = "https://cloud.r-project.org/"))' >> /home/jovyan/.Rprofile && \
-  echo 'options(Ncpus = 2)' >> /home/jovyan/.Rprofile
+  echo 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/jammy/latest"))' >> /home/jovyan/.Rprofile && \
+  echo 'options(Ncpus = 4)' >> /home/jovyan/.Rprofile && \
+  chown jovyan:users /home/jovyan/.Rprofile

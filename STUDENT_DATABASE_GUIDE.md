@@ -1,5 +1,21 @@
 # Student Database Connection Guide
 
+## 🖱️ Quick Start: Connecting with the Database Client (Postgres Explorer)
+
+The container ships with the **Database Client** extension (`cweijan.vscode-postgresql-client2`). To add the classroom database:
+
+1. Click the **Database** icon in the Activity Bar (left sidebar).
+2. Click **➕ Create Connection** → pick **PostgreSQL**.
+3. Fill in:
+   - **Host:** `localhost`
+   - **Port:** `5432`
+   - **Username:** `student`
+   - **Password:** *(leave blank)*
+   - **Database:** `postgres`  *(or `student_db`)*
+4. Click **Connect**. The connection persists for the workspace.
+
+> Available databases: `postgres`, `student_db`. Trust auth is configured, so no password is needed.
+
 ## 🎯 Quick Start: Connecting to PostgreSQL from R
 
 ### Basic Connection
@@ -10,7 +26,7 @@ library(RPostgres)
 # Connect to the student database
 con <- dbConnect(RPostgres::Postgres(), 
                  host = "localhost",
-                 dbname = "student",
+                 dbname = "postgres",
                  user = "student",
                  password = "")
 ```

@@ -23,11 +23,21 @@ else
 fi
 
 # Check R kernel
-if jupyter kernelspec list 2>/dev/null | grep -q "ir"; then
+if jupyter kernelspec list 2>/dev/null | grep -qE '^\s*ir\s'; then
     echo "   ✅ R kernel registered with Jupyter"
 else
-    echo "   ❌ R kernel not registered (run: R -e \"IRkernel::installspec(user=TRUE)\")"
+    echo "   ❌ R kernel not registered"
+    echo "      Fix: R -e \"IRkernel::installspec(user=TRUE, name='ir', displayname='R')\""
     ((ISSUES++))
+fi
+
+# Check user R library is writable (so install.packages() works for students)
+USER_R_LIB="$HOME/R/library"
+if [ -d "$USER_R_LIB" ] && [ -w "$USER_R_LIB" ]; then
+    echo "   ✅ User R library writable ($USER_R_LIB)"
+else
+    echo "   ⚠️  User R library missing or read-only: $USER_R_LIB"
+    mkdir -p "$USER_R_LIB" 2>/dev/null || true
 fi
 
 # Check mlba package
@@ -145,7 +155,8 @@ if [ $ISSUES -eq 0 ]; then
 else
     echo "⚠️ Found $ISSUES issue(s). Run the fixes shown above."
     echo ""
-    echo "Or run full setup: bash /workspaces/test2/.devcontainer/conda_setup.sh"
+    WORKSPACE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+    echo "Or run full setup: bash $WORKSPACE_DIR/.devcontainer/conda_setup.sh"
 fi
 echo "════════════════════════════════════════════════════════════════"
 echo ""
