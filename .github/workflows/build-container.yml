@@ -1,4 +1,5 @@
 name: Build and Push Container Image
+# Last manual retrigger: 2026-05-13 (after GHCR write permission grant)
 
 on:
   push:
