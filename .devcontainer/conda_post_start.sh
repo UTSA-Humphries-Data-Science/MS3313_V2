@@ -44,17 +44,19 @@ fi
 GLOBAL_IR=/opt/conda/share/jupyter/kernels/ir/kernel.json
 USER_IR="$HOME/.local/share/jupyter/kernels/ir/kernel.json"
 
-if [ ! -f "$GLOBAL_IR" ] && [ ! -f "$USER_IR" ]; then
-    echo "🔧 R kernel missing — registering..."
-    if [ -w /opt/conda/share/jupyter/kernels ] 2>/dev/null; then
-        R --quiet --no-save -e "IRkernel::installspec(user=FALSE, name='ir', displayname='R')" \
-            >/dev/null 2>&1 || \
-        R --quiet --no-save -e "IRkernel::installspec(user=TRUE,  name='ir', displayname='R')" \
-            >/dev/null 2>&1
-    else
-        R --quiet --no-save -e "IRkernel::installspec(user=TRUE, name='ir', displayname='R')" \
-            >/dev/null 2>&1
-    fi
+# Always ensure the USER-level kernelspec exists. VS Code's Jupyter extension
+# reliably discovers user-level kernels; the conda-global location is sometimes
+# filtered out, causing the "R kernel doesn't show up in notebooks" issue.
+if [ ! -f "$USER_IR" ]; then
+    echo "🔧 Registering R kernel at user level..."
+    R --quiet --no-save -e "IRkernel::installspec(user=TRUE, name='ir', displayname='R')" \
+        >/dev/null 2>&1
+fi
+
+# Also ensure global kernelspec exists (defensive, for non-VS-Code Jupyter clients)
+if [ ! -f "$GLOBAL_IR" ] && [ -w /opt/conda/share/jupyter/kernels ] 2>/dev/null; then
+    R --quiet --no-save -e "IRkernel::installspec(user=FALSE, name='ir', displayname='R')" \
+        >/dev/null 2>&1 || true
 fi
 
 # Refresh kernelspec cache (helps VS Code Jupyter detect kernels without restart)

@@ -80,6 +80,9 @@ RUN R -e "devtools::install_github('gedeck/mlba/mlba', force=TRUE, upgrade='neve
 # Install R kernel system-wide so every user/workspace sees it without re-registration.
 # We also install it into the user prefix as a fallback so VS Code Jupyter always finds it.
 RUN R -e "IRkernel::installspec(user=FALSE, name='ir', displayname='R')" && \
+  # Also bake a user-level kernelspec into the image so VS Code's Jupyter
+  # extension reliably discovers the R kernel without any post-start step.
+  R -e "IRkernel::installspec(user=TRUE,  name='ir', displayname='R')" && \
   python3 -m ipykernel install --name python3 --display-name "Python 3" --sys-prefix && \
   # Make global kernel spec dir readable/writable so re-registration in postStart never fails
   chown -R jovyan:users /opt/conda/share/jupyter/kernels && \
